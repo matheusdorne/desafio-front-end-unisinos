@@ -1,0 +1,66 @@
+{
+  "usuarios": [
+    {
+      "id": 1,
+      "matricula": "2026001",
+      "nome": "Matheus",
+      "email": "aluno@edu.br",
+      "senha": "123456",
+      "perfil": "aluno",
+      "disciplinasConcluidasIds": []
+    },
+    {
+      "id": 2,
+      "matricula": "ADM-001",
+      "nome": "Coordenação Acadêmica",
+      "email": "instituicao@edu.br",
+      "senha": "123456",
+      "perfil": "instituicao",
+      "disciplinasConcluidasIds": []
+    }
+  ],
+  "disciplinas": [
+    {
+      "id": 1,
+      "nome": "Programação Front-End",
+      "creditos": 4,
+      "preRequisitosIds": []
+    },
+    {
+      "id": 2,
+      "nome": "Banco de Dados I",
+      "creditos": 4,
+      "preRequisitosIds": []
+    }
+  ],
+  "professores": [
+    {
+      "id": 1,
+      "nome": "Carlos Eduardo",
+      "disciplinasIds": [1]
+    },
+    {
+      "id": 2,
+      "nome": "Ana Paula",
+      "disciplinasIds": [2]
+    }
+  ],
+  "turmas": [
+    {
+      "id": 1,
+      "codigoTurma": "3301",
+      "disciplinaId": 1,
+      "disciplina": "Programação Front-End",
+      "creditos": 4,
+      "preRequisitosIds": [],
+      "professorId": 1,
+      "professor": "Carlos Eduardo",
+      "turno": "Noite",
+      "diaSemana": "Terça-feira",
+      "dataFim": "2026-12-15",
+      "vagas": 30,
+      "matriculados": 0
+    }
+  ],
+  "matriculas": []
+}

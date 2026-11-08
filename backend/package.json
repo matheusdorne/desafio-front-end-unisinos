@@ -1,0 +1,17 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "API do sistema de matrículas",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --watch server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "test:watch": "node --test --watch"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
