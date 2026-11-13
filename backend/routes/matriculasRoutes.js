@@ -1,26 +1,40 @@
 import { Router } from 'express';
-import { lerDados, salvarDados, LIMITE_CREDITOS_SEMESTRE } from '../storage.js';
+import { buscarUsuarioPorId } from '../repositories/usuarioRepository.js';
+import {
+  buscarDisciplinaPorId,
+  buscarDisciplinasPorIds,
+  buscarTurmaPorId,
+} from '../repositories/instituicaoRepository.js';
+import {
+  listarMatriculas,
+  buscarMatriculaPorId,
+  listarMatriculasPorUsuario,
+  inserirMatricula,
+  removerMatriculaPorId,
+  LIMITE_CREDITOS_SEMESTRE,
+} from '../repositories/matriculaRepository.js';
 
 const router = Router();
 
 router.get('/matriculas', (req, res) => {
-  res.json(lerDados().matriculas);
+  res.json(listarMatriculas());
 });
 
 router.post('/matriculas', (req, res) => {
-  const dados = lerDados();
   const { usuarioId, matriculaAluno, aluno, turmaId } = req.body;
-  const turma = dados.turmas.find((t) => t.id === Number(turmaId));
+
+  const turma = buscarTurmaPorId(turmaId);
   if (!turma) {
     return res.status(404).json({ erro: 'Turma não encontrada.' });
   }
+
   if (turma.matriculados >= turma.vagas) {
     return res.status(400).json({ erro: 'Esta turma já está com as vagas esgotadas.' });
   }
 
-  const usuario = dados.usuarios.find((u) => u.id === Number(usuarioId));
+  const usuario = buscarUsuarioPorId(usuarioId);
   const concluidasIds = usuario?.disciplinasConcluidasIds || [];
-  const matriculasAluno = dados.matriculas.filter((m) => m.usuarioId === Number(usuarioId));
+  const matriculasAluno = listarMatriculasPorUsuario(usuarioId);
 
   if (concluidasIds.includes(Number(turma.disciplinaId))) {
     return res
@@ -28,6 +42,44 @@ router.post('/matriculas', (req, res) => {
       .json({ erro: 'Você já concluiu esta disciplina em um semestre anterior.' });
   }
 
+  // Unicidade garantida pelo usuarioId e disciplinaId
+  const jaMatriculado = matriculasAluno.some(
+    (m) => m.turmaId === turma.id || (turma.disciplinaId && m.disciplinaId === turma.disciplinaId),
+  );
+  if (jaMatriculado) {
+    return res.status(400).json({ erro: 'Você já está matriculado nesta disciplina.' });
+  }
+
+  // Validação de pré-requisitos: exige conclusão em semestre anterior (não pode cursar no mesmo semestre)
+  const disc = buscarDisciplinaPorId(turma.disciplinaId);
+  const listaPreReq =
+    turma.preRequisitosIds && turma.preRequisitosIds.length > 0
+      ? turma.preRequisitosIds
+      : disc?.preRequisitosIds || [];
+  const naoConcluidos = listaPreReq.filter((idPreReq) => !concluidasIds.includes(Number(idPreReq)));
+  if (naoConcluidos.length > 0) {
+    const cursandoNesteSemestre = naoConcluidos.filter((idPreReq) =>
+      matriculasAluno.some((m) => Number(m.disciplinaId) === Number(idPreReq)),
+    );
+
+    if (cursandoNesteSemestre.length > 0) {
+      const nomesCursando = buscarDisciplinasPorIds(cursandoNesteSemestre)
+        .map((d) => d.nome)
+        .join(', ');
+      return res.status(400).json({
+        erro: `Não é permitido cursar "${turma.disciplina}" no mesmo semestre de seu pré-requisito ("${nomesCursando}"). Aguarde a data final da disciplina de pré-requisito.`,
+      });
+    }
+
+    const nomesPendentes = buscarDisciplinasPorIds(naoConcluidos)
+      .map((d) => d.nome)
+      .join(', ');
+    return res.status(400).json({
+      erro: `Pré-requisito pendente: é necessário ter concluído "${nomesPendentes}" em semestre anterior para cursar "${turma.disciplina}".`,
+    });
+  }
+
+  // Validação do limite de créditos por semestre
   const creditosAtuais = matriculasAluno.reduce((acc, m) => acc + (Number(m.creditos) || 4), 0);
   const creditosTurma = Number(turma.creditos) || 4;
   if (creditosAtuais + creditosTurma > LIMITE_CREDITOS_SEMESTRE) {
@@ -36,40 +88,35 @@ router.post('/matriculas', (req, res) => {
     });
   }
 
-  turma.matriculados += 1;
-  const novaMatricula = {
-    id: Date.now(),
-    usuarioId: Number(usuarioId),
+  const choqueHorario = matriculasAluno.find(
+    (m) => m.diaSemana === turma.diaSemana && m.turno === turma.turno,
+  );
+  if (choqueHorario) {
+    return res.status(400).json({
+      erro: `Choque de horário: você já cursa "${choqueHorario.disciplina}" (Turma ${choqueHorario.codigoTurma}) na ${turma.diaSemana} (${turma.turno}).`,
+    });
+  }
+
+  const novaMatricula = inserirMatricula({
+    usuarioId,
     matriculaAluno,
     aluno,
     emailAluno: usuario?.email || '',
-    turmaId: turma.id,
-    codigoTurma: turma.codigoTurma,
-    disciplinaId: turma.disciplinaId,
-    disciplina: turma.disciplina,
-    creditos: creditosTurma,
-    professor: turma.professor,
-    turno: turma.turno,
-    diaSemana: turma.diaSemana,
-    dataFim: turma.dataFim || '2026-12-15',
-  };
+    turma,
+  });
 
-  dados.matriculas.push(novaMatricula);
-  salvarDados(dados);
   res.status(201).json(novaMatricula);
 });
 
 router.delete('/matriculas/:id', (req, res) => {
-  const dados = lerDados();
   const idMatricula = Number(req.params.id);
-  const matricula = dados.matriculas.find((m) => m.id === idMatricula);
-  if (!matricula) {
+  const matriculaExistente = buscarMatriculaPorId(idMatricula);
+
+  if (!matriculaExistente) {
     return res.status(404).json({ erro: 'Matrícula não encontrada.' });
   }
-  const turma = dados.turmas.find((t) => t.id === matricula.turmaId);
-  if (turma && turma.matriculados > 0) turma.matriculados -= 1;
-  dados.matriculas = dados.matriculas.filter((m) => m.id !== idMatricula);
-  salvarDados(dados);
+
+  removerMatriculaPorId(idMatricula);
   res.json({ mensagem: 'Matrícula cancelada com sucesso.' });
 });
 

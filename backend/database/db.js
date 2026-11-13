@@ -1,11 +1,21 @@
 import fs from 'fs';
+import { DADOS_INICIAIS } from './seed.js';
 
 const ARQUIVO_DADOS = './dados.json';
 
-export const LIMITE_CREDITOS_SEMESTRE = 16;
-export const LIMITE_TURMAS_PROFESSOR = 3;
+export function obterDataFimPadraoSemestre(dataReferencia = new Date()) {
+  const ano = dataReferencia.getFullYear();
+  const mes = dataReferencia.getMonth();
+  return mes < 6 ? `${ano}-07-15` : `${ano}-12-15`;
+}
 
-export function salvarDados(dados) {
+export function gerarProximoId(lista = []) {
+  if (!Array.isArray(lista) || lista.length === 0) return 1;
+  const maiorId = Math.max(...lista.map((item) => Number(item.id) || 0));
+  return maiorId + 1;
+}
+
+export function salvarBanco(dados) {
   fs.writeFileSync(ARQUIVO_DADOS, JSON.stringify(dados, null, 2));
 }
 
@@ -36,38 +46,17 @@ export function processarCicloAutomatico(dados, dataReferencia) {
 
   if (houveAlteracao) {
     dados.matriculas = matriculasAtivas;
-    salvarDados(dados);
+    salvarBanco(dados);
   }
 
   return dados;
 }
 
-export function lerDados() {
+export function lerBanco() {
+  if (!fs.existsSync(ARQUIVO_DADOS)) {
+    salvarBanco(DADOS_INICIAIS);
+  }
   const conteudo = fs.readFileSync(ARQUIVO_DADOS, 'utf-8');
   const dados = JSON.parse(conteudo);
   return processarCicloAutomatico(dados);
-}
-
-export function gerarCodigoTurma(diaSemana, turno, sequencial) {
-  const mapaDia = {
-    'Segunda-feira': '2',
-    'Terça-feira': '3',
-    'Quarta-feira': '4',
-    'Quinta-feira': '5',
-    'Sexta-feira': '6',
-  };
-  const mapaTurno = { Manhã: '1', Tarde: '2', Noite: '3' };
-  const prefixo = `${mapaDia[diaSemana] || '2'}${mapaTurno[turno] || '1'}`;
-  return `${prefixo}${String(sequencial).padStart(2, '0')}`;
-}
-
-export function sanitizarUsuario(usuario) {
-  return {
-    id: usuario.id,
-    matricula: usuario.matricula,
-    nome: usuario.nome,
-    email: usuario.email,
-    perfil: usuario.perfil,
-    disciplinasConcluidasIds: usuario.disciplinasConcluidasIds || [],
-  };
 }
